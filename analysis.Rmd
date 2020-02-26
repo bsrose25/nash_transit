@@ -1,0 +1,66 @@
+---
+title: "analysis"
+author: "B. Rose"
+date: "February 25, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+```
+
+# Import and clean census data 
+
+```{r init census}
+files <- list.files(path = "census_data", pattern = "*overlays*")
+pop_data <- 
+  data_frame(filename = files) %>% 
+  mutate(file_contents = map(filename,         
+           ~ read_csv(file.path("census_data", .), skip = 1)[,c(3:4)])) %>% 
+  unnest()
+
+pop_data[,1] <- seq(2010, 2018)
+colnames(pop_data) <- c("year", "total_population", "pop_error_margin")
+```
+
+#Import and clean accidents data
+
+```{r init accidents}
+files <- list.files(path = "accidents_data", pattern = "*csv")
+acc_data <- files %>%  
+  map(~ read_csv(file.path("accidents_data", .))[,c(1:5)]) %>% 
+  reduce(rbind) %>% 
+  janitor::clean_names("snake") %>% 
+  mutate(year = year(mdy_hms(date_and_time)), 
+        month = month(mdy_hms(date_and_time)), 
+         day = wday(mdy_hms(date_and_time), label = TRUE, abbr = FALSE), 
+         rush = ifelse(hour(mdy_hms(date_and_time)) %in% c(7:9, 16:18) & 
+                         day %in% c("Saturday", "Sunday") == FALSE,
+                        "Rush Hour", "Not Rush Hour"))
+
+```
+
+
+```{r rush hour accidents, include = TRUE}
+
+comb_data <- left_join(x = acc_data, y = pop_data, by = "year") %>% 
+  group_by_at(vars(rush, year)) %>% 
+  add_tally() %>% 
+  summarise(nacc = sum(n()),
+            pop = mean(total_population) 
+            )
+
+#histogram
+comb_data %>% ggplot() +
+  geom_bar(mapping = aes(x = year, y = nacc, fill = rush), stat = "identity") + 
+  scale_y_continuous(name = "Total traffic accidents")
+
+comb_data %>% ggplot() +
+  geom_line(mapping = aes(x = year, y = pop))
+
+
+```
+
