@@ -10,11 +10,12 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
 library(janitor)
+library(ggpubr)
 ```
 
-# Import and clean census data 
-
-```{r init census}
+#Import and clean
+##Census data
+```{r init census, include = FALSE}
 files <- list.files(path = "census_data", pattern = "*overlays*")
 pop_data <- 
   data_frame(filename = files) %>% 
@@ -26,9 +27,8 @@ pop_data[,1] <- seq(2010, 2018)
 colnames(pop_data) <- c("year", "total_population", "pop_error_margin")
 ```
 
-#Import and clean accidents data
-
-```{r init accidents}
+##Accidents data
+```{r init accidents, include = FALSE}
 files <- list.files(path = "accidents_data", pattern = "*csv")
 acc_data <- files %>%  
   map(~ read_csv(file.path("accidents_data", .))[,c(1:5)]) %>% 
@@ -40,27 +40,76 @@ acc_data <- files %>%
          rush = ifelse(hour(mdy_hms(date_and_time)) %in% c(7:9, 16:18) & 
                          day %in% c("Saturday", "Sunday") == FALSE,
                         "Rush Hour", "Not Rush Hour"))
-
 ```
 
+#Combine tidy data
+```{r combined data, include = TRUE}
+comb_data <- acc_data %>% 
+  count(year, rush, name = 'total_rush') %>% 
+  group_by(year) %>% 
+  mutate(total_accidents = sum(total_rush), 
+      pct = total_rush/sum(total_rush)) %>% 
+  filter(rush == "Rush Hour") %>% 
+  left_join(y = pop_data, by = 'year')
+```
 
-```{r rush hour accidents, include = TRUE}
-
-comb_data <- left_join(x = acc_data, y = pop_data, by = "year") %>% 
-  group_by_at(vars(rush, year)) %>% 
-  add_tally() %>% 
-  summarise(nacc = sum(n()),
-            pop = mean(total_population) 
-            )
-
+#Visual data exploration
+```{r test plots, include = TRUE}
 #histogram
-comb_data %>% ggplot() +
-  geom_bar(mapping = aes(x = year, y = nacc, fill = rush), stat = "identity") + 
-  scale_y_continuous(name = "Total traffic accidents")
-
-comb_data %>% ggplot() +
-  geom_line(mapping = aes(x = year, y = pop))
-
-
+a <- comb_data %>% ggplot() +
+  geom_bar(mapping = aes(x = year, y = total_accidents, fill = year), stat = 'identity') + 
+  scale_y_continuous(name = "Total accidents") +
+  scale_x_continuous(name = "Year", breaks = c(2010:2019)) +
+    theme_classic() +
+  theme(axis.title = element_text(color = "black", size = 10, face = 'bold'), 
+        axis.text = element_text(color = 'black', size = 8, face = 'bold'), 
+        axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1), 
+        legend.position = "none")
 ```
 
+##Population growth chart by year
+```{r population chart, include = TRUE}
+#population line graph
+p <- comb_data %>% ggplot() +
+  geom_line(mapping = aes(x = year, y = total_population), size = 2, color = '#182B41')+
+  scale_x_continuous(name = "Year", breaks = c(2010:2019))+
+  scale_y_continuous(name = "Population (estimate)")+
+  theme_classic() +
+  theme(axis.title = element_text(color = "black", size = 10, face = 'bold'), 
+        axis.text = element_text(color = 'black', size = 8, face = 'bold'), 
+        axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1), 
+        legend.position = "none")
+p
+```
+
+##Accident density plot by year
+```{r density plot}
+#density plot by year vs hour of accident
+d <- acc_data %>%ggplot(aes(x = hour(mdy_hms(date_and_time)), fill = year)) +
+  facet_grid(year ~.) +
+  geom_density() +
+  scale_x_continuous(name = "Hour (24-hour scale)") +
+  scale_y_continuous(name = "Accident Density") +
+  theme_classic() +
+    theme(axis.title = element_text(color = "black", size = 10, face = 'bold'), 
+        axis.text.x = element_text(color = 'black', size = 8, face = 'bold'), 
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank(),
+        axis.line.x = element_line(size = 1), 
+        axis.ticks = element_line(size = 1), 
+        legend.position = "none")
+
+ggsave(d, filename = "accident_density.tiff",  bg = "transparent")
+```
+
+##Arrange them all pretty and stuff
+```{r arrange, include = TRUE}
+ggsave(ggarrange(
+     ggarrange(p, a, nrow = 2), 
+     d, ncol = 2
+ ), filename = "arranged_plots.tiff", width = 8, height = 5
+)
+```
