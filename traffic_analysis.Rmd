@@ -10,7 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
 library(janitor)
-library(ggpubr)
 ```
 
 #Import and clean
@@ -39,8 +38,11 @@ acc_data <- files %>%
   janitor::clean_names("snake") %>% 
   mutate(year = year(mdy_hms(date_and_time)), 
         month = month(mdy_hms(date_and_time)), 
-         day = wday(mdy_hms(date_and_time), label = TRUE, abbr = FALSE), 
-         rush = ifelse(hour(mdy_hms(date_and_time)) %in% c(7:9, 16:18) & 
+         day = wday(mdy_hms(date_and_time), label = TRUE, 
+                    abbr = FALSE), 
+        #flag accidents that happened during rush hour
+         rush = ifelse(hour(mdy_hms(date_and_time)) %in% 
+                         c(7:9, 16:18) & 
                          day %in% c("Saturday", "Sunday") == FALSE,
                         "Rush Hour", "Not Rush Hour"))
 ```
@@ -94,19 +96,22 @@ p
 d <- acc_data %>% ggplot(aes(x = hour(mdy_hms(date_and_time)), fill = year)) +
   facet_grid(year ~.) +
   geom_density() +
-  scale_x_continuous(name = "Hour (24-hour scale)") +
-  scale_y_continuous(name = "Accident Density") +
+  labs(
+    #title = "Accident Density per Hour", 
+       x = "Hour (24-hour scale)") +
   theme_classic() +
-    theme(axis.title = element_text(color = "black", size = 10), 
-        axis.text.x = element_text(color = 'black', size = 8), 
+    theme(
+      #plot.title = element_text(color="black", size=14, face="bold", hjust = 0.5),
+        axis.title = element_text(color = "black", size = 14, face = 'bold'), 
+        axis.text.x = element_text(color = 'black', size = 12, face = 'bold'), 
         axis.text.y=element_blank(),
+        axis.title.y=element_blank(),
         axis.ticks.y=element_blank(),
         axis.line.y = element_blank(),
         axis.line.x = element_line(size = 1), 
         axis.ticks = element_line(size = 1), 
         legend.position = "none")
 
-ggsave(d, filename = "accident_density.tiff",  bg = "transparent")
 ```
 
 ##Arrange the traffic graphs all pretty and stuff
