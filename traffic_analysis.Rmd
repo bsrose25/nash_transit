@@ -11,9 +11,6 @@ library(tidyverse)
 library(lubridate)
 library(janitor)
 library(ggpubr)
-library(tidycensus)
-
-census_api_key("c789047d81545971c874b03b4e8fcc45a9b99585", install = TRUE)
 ```
 
 #Import and clean
@@ -46,43 +43,6 @@ acc_data <- files %>%
          rush = ifelse(hour(mdy_hms(date_and_time)) %in% c(7:9, 16:18) & 
                          day %in% c("Saturday", "Sunday") == FALSE,
                         "Rush Hour", "Not Rush Hour"))
-```
-
-##Commuter data
-```{r init commute, echo = FALSE}
-#https://walkerke.github.io/tidycensus/articles/basic-usage.html
-vars_18 <- load_variables(2018, "acs5")
-
-# total commuters driving alone B08006_003
-# "" carpooling B08101_017
-# "" walked B08101_033
-# "" public transportation B08101_025
-# "" bike, taxi, other B08101_041
-# "" work from home B08101_049
-commuters <- 
-  data_frame(year = 2010:2018) %>% 
-  mutate(file_contents = map(year,  
-          ~ pivot_wider(
-              select(
-                  get_acs(geography = "county", 
-                          variables = c(driving_alone = "B08006_003", 
-                            carpool = "B08006_017", 
-                            walking = "B08006_033", 
-                            transit = "B08006_025", 
-                            other = "B08006_041", 
-                            wfh = "B08006_049"), 
-              state = "TN", 
-              county = "Davidson",
-              year = .)
-              , variable, estimate)
-              , names_from = variable, values_from = estimate)
-          )
-          ) %>%
-  unnest()
-
-
-#compare to OK city-- similar size by population, area, and growth
-
 ```
 
 #Combine tidy data
@@ -156,16 +116,4 @@ ggsave(ggarrange(
      d, ncol = 2
  ), filename = "arranged_plots.png", width = 8, height = 5
 )
-```
-
-##Commuter data viz
-```{r commuters, include = TRUE}
-pct_commuters <- commuters %>% pivot_longer(-year, names_to = "variable", values_to = "estimate") %>% 
-  group_by(year) %>% 
-  mutate(pct = estimate/sum(estimate))
-  
-pct_commuters %>% filter(variable != "driving_alone") %>% 
-  ggplot(aes(x = year, y = pct, col = variable)) +
-  geom_line()
-
 ```
